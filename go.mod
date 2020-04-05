@@ -1,4 +1,4 @@
-module github.com/milossimic/fmmap
+module github.com/MilosSimic/fmmap
 
 go 1.14
 
