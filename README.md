@@ -1,5 +1,8 @@
-package main
+# fmmap
+Simple implementation of memory-mapped file
 
+# Usage
+```go
 import (
 	"fmt"
 	"os"
@@ -14,10 +17,11 @@ func main() {
 
 	fmt.Println(d)
 
-	err = d.Update([]byte("12357567sfgdgh"))
+	err = d.Update([]byte("12357567"))
 	if err != nil {
 		fmt.Println(err)
 	}
 
 	fmt.Println(d)
 }
+```
