@@ -18,8 +18,7 @@ func (fmmap *FMMAP) Close() {
 
 func (fmmap *FMMAP) Update(data []byte) error {
 	fmmap.mmap = data
-	fmmap.mmap.Flush()
-	return nil
+	return fmmap.mmap.Flush()
 }
 
 func (fmmap *FMMAP) UpdateFrom(i int, data []byte) error {
