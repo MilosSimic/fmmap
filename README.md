@@ -5,23 +5,24 @@ Simple implementation of memory-mapped file
 ```go
 import (
 	"fmt"
+	"github.com/milossimic/fmmap"
+	"io/ioutil"
 	"os"
 )
 
 func main() {
-	d, err := NewFile("mmap_test", os.O_RDWR|os.O_CREATE)
+	d, err := fmmap.NewFile("mmap_test", os.O_RDWR|os.O_CREATE)
 	if err != nil {
 		fmt.Println(err)
 	}
 	defer d.Close()
 
-	fmt.Println(d)
-
-	err = d.Update([]byte("12357567"))
+	err = d.Update([]byte("1235756789AB"))
 	if err != nil {
 		fmt.Println(err)
-	}
+	}	
 
-	fmt.Println(d)
+	fileData, err := ioutil.ReadAll(d.GetFile())
+	fmt.Println("DATA: ", string(fileData))
 }
 ```
