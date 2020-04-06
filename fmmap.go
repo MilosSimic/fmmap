@@ -3,6 +3,7 @@ package fmmap
 import (
 	"errors"
 	"fmt"
+	"golang.org/x/sys/unix"
 	"os"
 	"syscall"
 )
@@ -30,6 +31,10 @@ func (fmmap *FMMAP) Update(data []byte) error {
 	}
 	copy(fmmap.data, data)
 	fmmap.mmap()
+	err := fmmap.msync()
+	if err != nil {
+		return nil
+	}
 
 	return nil
 }
@@ -91,7 +96,7 @@ func (fmmap *FMMAP) open(filename string, flags int) {
 	}
 	fmmap.file = f
 	fmmap.fd = int(f.Fd())
-	fmmap.mmap()
+	// fmmap.mmap()
 }
 
 func (fmmap *FMMAP) mmap() {
@@ -109,6 +114,10 @@ func (fmmap *FMMAP) mmap() {
 	fmmap.data = data
 }
 
+func (fmmap *FMMAP) msync() error {
+	return unix.Msync(fmmap.data, unix.MS_SYNC)
+}
+
 func (fmmap *FMMAP) ftruncate(size int) error {
 	err := syscall.Ftruncate(fmmap.fd, int64(size))
 	if err != nil {
@@ -120,5 +129,7 @@ func (fmmap *FMMAP) ftruncate(size int) error {
 func NewFile(file string, flags int) (*FMMAP, error) {
 	fmmap := &FMMAP{}
 	fmmap.open(file, flags)
+	fmmap.mmap()
+
 	return fmmap, nil
 }
