@@ -2,8 +2,6 @@ package fmmap
 
 import (
 	"errors"
-	"fmt"
-	"golang.org/x/sys/unix"
 	"os"
 	"syscall"
 )
@@ -14,12 +12,13 @@ type FMMAP struct {
 	file *os.File
 }
 
-func (fmmap *FMMAP) Close() {
+func (fmmap *FMMAP) Close() error {
 	fmmap.file.Close()
 	err := syscall.Munmap(fmmap.data)
 	if err != nil {
-		fmt.Println("Error unmap data: ", err)
+		return err
 	}
+	return nil
 }
 
 func (fmmap *FMMAP) Update(data []byte) error {
@@ -28,14 +27,12 @@ func (fmmap *FMMAP) Update(data []byte) error {
 		if err != nil {
 			return err
 		}
+		err = fmmap.mmap()
+		if err != nil {
+			return err
+		}
 	}
 	copy(fmmap.data, data)
-	fmmap.mmap()
-	err := fmmap.msync()
-	if err != nil {
-		return nil
-	}
-
 	return nil
 }
 
@@ -44,8 +41,10 @@ func (fmmap *FMMAP) UpdateFrom(i int, data []byte) error {
 		return errors.New("Current file do not containt that starting position")
 	}
 	copy(fmmap.data[i:], data)
-	fmmap.mmap()
-
+	err := fmmap.mmap()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -54,8 +53,10 @@ func (fmmap *FMMAP) UpdateTo(i int, data []byte) error {
 		return errors.New("Current file do not containt that starting position")
 	}
 	copy(fmmap.data[:i], data)
-	fmmap.mmap()
-
+	err := fmmap.mmap()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -64,8 +65,10 @@ func (fmmap *FMMAP) Updaterange(i, j int, data []byte) error {
 		return errors.New("Current file do not containt that starting position")
 	}
 	copy(fmmap.data[i:j], data)
-	fmmap.mmap()
-
+	err := fmmap.mmap()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -96,26 +99,22 @@ func (fmmap *FMMAP) open(filename string, flags int) {
 	}
 	fmmap.file = f
 	fmmap.fd = int(f.Fd())
-	// fmmap.mmap()
 }
 
-func (fmmap *FMMAP) mmap() {
+func (fmmap *FMMAP) mmap() error {
 	f, err := fmmap.file.Stat()
 	if err != nil {
-		fmt.Println("Could not stat file: ", err)
-		return
+		return err
 	}
 
-	data, err := syscall.Mmap(fmmap.fd, 0, int(f.Size()), syscall.PROT_WRITE|syscall.PROT_READ, syscall.MAP_SHARED)
-	if err != nil {
-		fmt.Println("Error mmapping: ", err)
-		return
+	if int(f.Size()) != 0 {
+		data, err := syscall.Mmap(fmmap.fd, 0, int(f.Size()), syscall.PROT_WRITE|syscall.PROT_READ, syscall.MAP_SHARED)
+		if err != nil {
+			return err
+		}
+		fmmap.data = data
 	}
-	fmmap.data = data
-}
-
-func (fmmap *FMMAP) msync() error {
-	return unix.Msync(fmmap.data, unix.MS_SYNC)
+	return nil
 }
 
 func (fmmap *FMMAP) ftruncate(size int) error {
@@ -129,7 +128,9 @@ func (fmmap *FMMAP) ftruncate(size int) error {
 func NewFile(file string, flags int) (*FMMAP, error) {
 	fmmap := &FMMAP{}
 	fmmap.open(file, flags)
-	fmmap.mmap()
-
+	err := fmmap.mmap()
+	if err != nil {
+		return nil, err
+	}
 	return fmmap, nil
 }
