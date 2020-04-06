@@ -2,97 +2,123 @@ package fmmap
 
 import (
 	"errors"
-	mmaplib "github.com/edsrzf/mmap-go"
+	"fmt"
 	"os"
+	"syscall"
 )
 
 type FMMAP struct {
-	f    *os.File
-	mmap mmaplib.MMap
+	data []byte
+	fd   int
+	file *os.File
 }
 
 func (fmmap *FMMAP) Close() {
-	fmmap.f.Close()
-	fmmap.mmap.Unmap()
+	fmmap.file.Close()
+	err := syscall.Munmap(fmmap.data)
+	if err != nil {
+		fmt.Println("Error unmap data: ", err)
+	}
 }
 
 func (fmmap *FMMAP) Update(data []byte) error {
-	fmmap.mmap = data
-	return fmmap.mmap.Flush()
+	if len(data) != len(fmmap.data) {
+		err := fmmap.ftruncate(len(data))
+		if err != nil {
+			return err
+		}
+	}
+	copy(fmmap.data, data)
+	fmmap.mmap()
+
+	return nil
 }
 
 func (fmmap *FMMAP) UpdateFrom(i int, data []byte) error {
-	if len(fmmap.mmap) < i {
+	if len(fmmap.data) < i {
 		return errors.New("Current file do not containt that starting position")
 	}
+	copy(fmmap.data[i:], data)
+	fmmap.mmap()
 
-	copy(fmmap.mmap[i:], data)
-	fmmap.mmap.Flush()
 	return nil
 }
 
 func (fmmap *FMMAP) UpdateTo(i int, data []byte) error {
-	if len(fmmap.mmap) < i {
+	if len(fmmap.data) < i {
 		return errors.New("Current file do not containt that starting position")
 	}
+	copy(fmmap.data[:i], data)
+	fmmap.mmap()
 
-	copy(fmmap.mmap[:i], data)
-	fmmap.mmap.Flush()
 	return nil
 }
 
 func (fmmap *FMMAP) Updaterange(i, j int, data []byte) error {
-	if len(fmmap.mmap) < i || len(fmmap.mmap) < j {
+	if len(fmmap.data) < i || len(fmmap.data) < j {
 		return errors.New("Current file do not containt that starting position")
 	}
+	copy(fmmap.data[i:j], data)
+	fmmap.mmap()
 
-	copy(fmmap.mmap[i:j], data)
-	fmmap.mmap.Flush()
 	return nil
 }
 
 func (fmmap *FMMAP) Get() []byte {
-	return fmmap.mmap
+	return fmmap.data
 }
 
 func (fmmap *FMMAP) GetFrom(i int) []byte {
-	return fmmap.mmap[i:]
+	return fmmap.data[i:]
 }
 
 func (fmmap *FMMAP) GetTo(i int) []byte {
-	return fmmap.mmap[:i]
+	return fmmap.data[:i]
 }
 
 func (fmmap *FMMAP) GetRange(i, j int) []byte {
-	return fmmap.mmap[i:j]
+	return fmmap.data[i:j]
 }
 
 func (fmmap *FMMAP) GetFile() *os.File {
-	return fmmap.f
+	return fmmap.file
+}
+
+func (fmmap *FMMAP) open(filename string, flags int) {
+	f, err := os.OpenFile(filename, flags, 0644)
+	if err != nil {
+		panic(err.Error())
+	}
+	fmmap.file = f
+	fmmap.fd = int(f.Fd())
+	fmmap.mmap()
+}
+
+func (fmmap *FMMAP) mmap() {
+	f, err := fmmap.file.Stat()
+	if err != nil {
+		fmt.Println("Could not stat file: ", err)
+		return
+	}
+
+	data, err := syscall.Mmap(fmmap.fd, 0, int(f.Size()), syscall.PROT_WRITE|syscall.PROT_READ, syscall.MAP_SHARED)
+	if err != nil {
+		fmt.Println("Error mmapping: ", err)
+		return
+	}
+	fmmap.data = data
+}
+
+func (fmmap *FMMAP) ftruncate(size int) error {
+	err := syscall.Ftruncate(fmmap.fd, int64(size))
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func NewFile(file string, flags int) (*FMMAP, error) {
-	f, err := openFile(file, flags)
-	if err != nil {
-		return nil, err
-	}
-
-	add, err := stat(f)
-	if err != nil {
-		return nil, err
-	}
-
-	if add {
-		f.Write(testData)
-	}
-
-	mmap, err := mmaplib.Map(f, mmaplib.RDWR, 0)
-	if err != nil {
-		return nil, err
-	}
-
-	return &FMMAP{
-		f:    f,
-		mmap: mmap,
-	}, nil
+	fmmap := &FMMAP{}
+	fmmap.open(file, flags)
+	return fmmap, nil
 }
