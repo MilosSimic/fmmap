@@ -3,6 +3,7 @@ package fmmap
 import (
 	"errors"
 	"os"
+	"sync"
 	"syscall"
 )
 
@@ -10,6 +11,7 @@ type FMMAP struct {
 	data []byte
 	fd   int
 	file *os.File
+	mu   sync.Mutex
 }
 
 func (fmmap *FMMAP) Close() error {
@@ -22,6 +24,9 @@ func (fmmap *FMMAP) Close() error {
 }
 
 func (fmmap *FMMAP) Update(data []byte) error {
+	fmmap.mu.Lock()
+	defer fmmap.mu.Unlock()
+
 	if len(data) != len(fmmap.data) {
 		err := fmmap.ftruncate(len(data))
 		if err != nil {
@@ -37,6 +42,9 @@ func (fmmap *FMMAP) Update(data []byte) error {
 }
 
 func (fmmap *FMMAP) UpdateFrom(i int, data []byte) error {
+	fmmap.mu.Lock()
+	defer fmmap.mu.Unlock()
+
 	if len(fmmap.data) < i {
 		return errors.New("Current file do not containt that starting position")
 	}
@@ -49,6 +57,9 @@ func (fmmap *FMMAP) UpdateFrom(i int, data []byte) error {
 }
 
 func (fmmap *FMMAP) UpdateTo(i int, data []byte) error {
+	fmmap.mu.Lock()
+	defer fmmap.mu.Unlock()
+
 	if len(fmmap.data) < i {
 		return errors.New("Current file do not containt that starting position")
 	}
@@ -60,7 +71,10 @@ func (fmmap *FMMAP) UpdateTo(i int, data []byte) error {
 	return nil
 }
 
-func (fmmap *FMMAP) Updaterange(i, j int, data []byte) error {
+func (fmmap *FMMAP) UpdateRange(i, j int, data []byte) error {
+	fmmap.mu.Lock()
+	defer fmmap.mu.Unlock()
+
 	if len(fmmap.data) < i || len(fmmap.data) < j {
 		return errors.New("Current file do not containt that starting position")
 	}
@@ -73,18 +87,30 @@ func (fmmap *FMMAP) Updaterange(i, j int, data []byte) error {
 }
 
 func (fmmap *FMMAP) Get() []byte {
+	fmmap.mu.Lock()
+	defer fmmap.mu.Unlock()
+
 	return fmmap.data
 }
 
 func (fmmap *FMMAP) GetFrom(i int) []byte {
+	fmmap.mu.Lock()
+	defer fmmap.mu.Unlock()
+
 	return fmmap.data[i:]
 }
 
 func (fmmap *FMMAP) GetTo(i int) []byte {
+	fmmap.mu.Lock()
+	defer fmmap.mu.Unlock()
+
 	return fmmap.data[:i]
 }
 
 func (fmmap *FMMAP) GetRange(i, j int) []byte {
+	fmmap.mu.Lock()
+	defer fmmap.mu.Unlock()
+
 	return fmmap.data[i:j]
 }
 
